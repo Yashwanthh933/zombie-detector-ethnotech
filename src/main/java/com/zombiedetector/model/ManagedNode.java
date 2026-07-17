@@ -1,8 +1,9 @@
 package com.zombiedetector.model;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import java.time.LocalDateTime;
 
 @Entity
 public class ManagedNode {
@@ -14,14 +15,16 @@ public class ManagedNode {
     private double hourlyRate;
     private String environment;
 
-    private double avgCpuLoadLast15Min;
-    private LocalDateTime lastTrafficTimestamp;
+    private double avgCpuLoadLast15Min;       // display only -- NOT used by the detector
+    private LocalDateTime lastTrafficTimestamp; // display only -- NOT used by the detector
 
     private NodeStatus status;
     private LocalDateTime flaggedAt;
     private LocalDateTime gracePeriodEndsAt;
+    private int cleanStreak;                   // consecutive non-idle cycles while FLAGGED
+    private LocalDateTime manualOverrideUntil;  // human override window
 
-    public ManagedNode() {} // required by JPA
+    public ManagedNode() {}
 
     public ManagedNode(String nodeId, String instanceType, double hourlyRate, String environment) {
         this.nodeId = nodeId;
@@ -30,6 +33,7 @@ public class ManagedNode {
         this.environment = environment;
         this.status = NodeStatus.RUNNING;
         this.lastTrafficTimestamp = LocalDateTime.now();
+        this.cleanStreak = 0;
     }
 
     public String getNodeId() { return nodeId; }
@@ -51,4 +55,10 @@ public class ManagedNode {
 
     public LocalDateTime getGracePeriodEndsAt() { return gracePeriodEndsAt; }
     public void setGracePeriodEndsAt(LocalDateTime t) { this.gracePeriodEndsAt = t; }
+
+    public int getCleanStreak() { return cleanStreak; }
+    public void setCleanStreak(int v) { this.cleanStreak = v; }
+
+    public LocalDateTime getManualOverrideUntil() { return manualOverrideUntil; }
+    public void setManualOverrideUntil(LocalDateTime t) { this.manualOverrideUntil = t; }
 }
