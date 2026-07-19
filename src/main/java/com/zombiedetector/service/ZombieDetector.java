@@ -95,18 +95,6 @@ public class ZombieDetector {
     private Optional<String> checkIfZombie(ManagedNode node) {
         LocalDateTime windowStart = LocalDateTime.now().minusMinutes(IDLE_WINDOW_MINUTES);
         List<NodeMetric> recent = metricRepository.findByNodeIdAndTimestampAfter(node.getNodeId(), windowStart);
-
-        if (recent.size() < MIN_SAMPLES_REQUIRED) {
-            return Optional.empty(); // not enough history yet -- don't guess
-        }
-
-        double maxCpu = recent.stream().mapToDouble(NodeMetric::getCpuLoad).max().orElse(100);
-        boolean anyTraffic = recent.stream().anyMatch(NodeMetric::isHadTraffic);
-
-        if (maxCpu < CPU_THRESHOLD && !anyTraffic) {
-            return Optional.of("Idle: CPU stayed below " + CPU_THRESHOLD + "% and zero traffic across "
-                    + recent.size() + " samples over the last " + IDLE_WINDOW_MINUTES + " min");
-        }
-        return Optional.empty();
+        return ZombieRules.checkIfZombie(recent, CPU_THRESHOLD, MIN_SAMPLES_REQUIRED, IDLE_WINDOW_MINUTES);
     }
 }
