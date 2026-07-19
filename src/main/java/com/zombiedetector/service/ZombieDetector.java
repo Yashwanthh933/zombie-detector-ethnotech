@@ -10,75 +10,105 @@ import org.springframework.stereotype.Component;
 import com.zombiedetector.model.ManagedNode;
 import com.zombiedetector.model.NodeMetric;
 import com.zombiedetector.model.NodeStatus;
+import com.zombiedetector.model.Policy;
 import com.zombiedetector.repository.NodeMetricRepository;
 import com.zombiedetector.repository.NodeRepository;
 
 @Component
 public class ZombieDetector {
 
-    // Demo-speed constants -- see docs for the production-scale equivalents.
-    private static final int IDLE_WINDOW_MINUTES = 2;   // stands in for "2+ hours" in production
-    private static final int MIN_SAMPLES_REQUIRED = 5;  // don't judge on too little history
-    private static final double CPU_THRESHOLD = 15.0;
-    private static final int RECOVERY_STRIKES_REQUIRED = 3; // consecutive clean cycles before un-flagging
-    private static final int GRACE_PERIOD_SECONDS = 20;     // stands in for ~24h in production
+    // How long a PROD node can sit HOLDING before we raise an alert about it (demo-scale).
+    private static final int PROD_HOLD_ALERT_SECONDS = 60;
 
     private final NodeRepository nodeRepository;
     private final NodeMetricRepository metricRepository;
+    private final PolicyService policyService;
+    private final AuditService auditService;
+    private final AlertService alertService;
+    private final SchedulerState schedulerState;
 
-    public ZombieDetector(NodeRepository nodeRepository, NodeMetricRepository metricRepository) {
+    public ZombieDetector(NodeRepository nodeRepository, NodeMetricRepository metricRepository,
+                           PolicyService policyService, AuditService auditService,
+                           AlertService alertService, SchedulerState schedulerState) {
         this.nodeRepository = nodeRepository;
         this.metricRepository = metricRepository;
+        this.policyService = policyService;
+        this.auditService = auditService;
+        this.alertService = alertService;
+        this.schedulerState = schedulerState;
     }
 
     @Scheduled(fixedDelay = 30000)
     public void evaluateCluster() {
+        if (schedulerState.isPaused()) {
+            System.out.println("DETECTOR PAUSED - skipping tick");
+            return;
+        }
+
         System.out.println("DETECTOR TICK at " + LocalDateTime.now());
+        Policy policy = policyService.getCurrentPolicy();
         List<ManagedNode> nodes = nodeRepository.findAll();
 
         for (ManagedNode node : nodes) {
             if (node.getStatus() == NodeStatus.STOPPED) continue;
 
-            // Human override takes precedence over everything else.
             if (node.getManualOverrideUntil() != null
                     && LocalDateTime.now().isBefore(node.getManualOverrideUntil())) {
                 continue;
             }
 
-            Optional<String> reason = checkIfZombie(node);
+            Optional<String> reason = checkIfZombie(node, policy);
 
             if (reason.isPresent() && node.getStatus() == NodeStatus.RUNNING) {
                 node.setStatus(NodeStatus.FLAGGED);
                 node.setFlaggedAt(LocalDateTime.now());
-                node.setGracePeriodEndsAt(LocalDateTime.now().plusSeconds(GRACE_PERIOD_SECONDS));
+                node.setGracePeriodEndsAt(LocalDateTime.now().plusSeconds(policy.getGracePeriodSeconds()));
                 node.setCleanStreak(0);
                 System.out.println("FLAGGED: " + node.getNodeId() + " - " + reason.get());
+                auditService.log("scheduler", "FLAGGED", node.getNodeId(), "SUCCESS", reason.get());
 
             } else if (node.getStatus() == NodeStatus.FLAGGED) {
                 if (reason.isEmpty()) {
-                    // Hysteresis: require several consecutive clean reads, not just one.
                     node.setCleanStreak(node.getCleanStreak() + 1);
-                    if (node.getCleanStreak() >= RECOVERY_STRIKES_REQUIRED) {
+                    if (node.getCleanStreak() >= policy.getRecoveryStrikesRequired()) {
                         node.setStatus(NodeStatus.RUNNING);
                         node.setFlaggedAt(null);
                         node.setGracePeriodEndsAt(null);
                         node.setCleanStreak(0);
                         System.out.println("RECOVERED: " + node.getNodeId());
+                        auditService.log("scheduler", "RECOVERED", node.getNodeId(), "SUCCESS",
+                                "Usage returned to normal");
                     } else {
                         System.out.println("RECOVERING (streak " + node.getCleanStreak() + "/"
-                                + RECOVERY_STRIKES_REQUIRED + "): " + node.getNodeId());
+                                + policy.getRecoveryStrikesRequired() + "): " + node.getNodeId());
                     }
                 } else {
-                    node.setCleanStreak(0); // still idle -- reset any partial recovery progress
+                    node.setCleanStreak(0);
 
                     if (LocalDateTime.now().isAfter(node.getGracePeriodEndsAt())) {
                         if (node.getEnvironment().equals("PROD")) {
                             System.out.println("HOLDING (PROD, needs manual review): " + node.getNodeId());
+
+                            long heldSeconds = java.time.Duration.between(node.getFlaggedAt(), LocalDateTime.now()).getSeconds();
+                            if (heldSeconds > PROD_HOLD_ALERT_SECONDS) {
+                                alertService.raiseIfNotDuplicate("CRITICAL",
+                                        "PROD node needs manual review",
+                                        node.getNodeId() + " has been idle and held for over "
+                                                + PROD_HOLD_ALERT_SECONDS + "s. Owner: " + node.getOwnerEmail(),
+                                        node.getNodeId());
+                            }
                         } else {
                             node.setStatus(NodeStatus.STOPPED);
                             double monthlySavings = node.getHourlyRate() * 24 * 30;
                             System.out.printf("STOPPED: %s - Monthly savings: $%.2f%n",
                                     node.getNodeId(), monthlySavings);
+                            auditService.log("scheduler", "STOPPED", node.getNodeId(), "SUCCESS",
+                                    String.format("Monthly savings: $%.2f, owner: %s", monthlySavings, node.getOwnerEmail()));
+                            alertService.raiseIfNotDuplicate("INFO",
+                                    "Cost optimization applied",
+                                    node.getNodeId() + " stopped, saving $" + String.format("%.2f", monthlySavings)
+                                            + "/mo. Owner: " + node.getOwnerEmail(),
+                                    node.getNodeId());
                         }
                     }
                 }
@@ -87,14 +117,10 @@ public class ZombieDetector {
         nodeRepository.saveAll(nodes);
     }
 
-    /**
-     * Derives idleness from ACTUAL PERSISTED HISTORY, not a single cached value.
-     * Requires a minimum number of samples so a brand-new node (or one with a
-     * gap in metrics) is never judged on insufficient data.
-     */
-    private Optional<String> checkIfZombie(ManagedNode node) {
-        LocalDateTime windowStart = LocalDateTime.now().minusMinutes(IDLE_WINDOW_MINUTES);
+    private Optional<String> checkIfZombie(ManagedNode node, Policy policy) {
+        LocalDateTime windowStart = LocalDateTime.now().minusMinutes(policy.getIdleWindowMinutes());
         List<NodeMetric> recent = metricRepository.findByNodeIdAndTimestampAfter(node.getNodeId(), windowStart);
-        return ZombieRules.checkIfZombie(recent, CPU_THRESHOLD, MIN_SAMPLES_REQUIRED, IDLE_WINDOW_MINUTES);
+        return ZombieRules.checkIfZombie(recent, policy.getCpuThreshold(),
+                policy.getMinSamplesRequired(), policy.getIdleWindowMinutes());
     }
 }

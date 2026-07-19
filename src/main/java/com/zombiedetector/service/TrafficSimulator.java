@@ -1,8 +1,10 @@
 package com.zombiedetector.service;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -15,38 +17,59 @@ import com.zombiedetector.repository.NodeRepository;
 @Component
 public class TrafficSimulator {
 
+    // Rotates which nodes are "idle-natured" every N ticks, instead of a static
+    // hash-based assignment -- otherwise the exact same nodes are idle forever
+    // and the demo goes flat after one cycle.
+    private static final int ROTATE_EVERY_N_TICKS = 18; // ~3 min at 10s ticks
+
     private final NodeRepository nodeRepository;
     private final NodeMetricRepository metricRepository;
+    private final SchedulerState schedulerState;
     private final Random rand = new Random();
 
-    public TrafficSimulator(NodeRepository nodeRepository, NodeMetricRepository metricRepository) {
+    private Set<String> idleNodeIds = new HashSet<>();
+    private int tickCounter = 0;
+
+    public TrafficSimulator(NodeRepository nodeRepository, NodeMetricRepository metricRepository,
+                             SchedulerState schedulerState) {
         this.nodeRepository = nodeRepository;
         this.metricRepository = metricRepository;
+        this.schedulerState = schedulerState;
     }
 
     @Scheduled(fixedDelay = 10000)
     public void simulate() {
-        System.out.println("SIMULATOR TICK at " + LocalDateTime.now());
+        if (schedulerState.isPaused()) {
+            System.out.println("SIMULATOR PAUSED - skipping tick");
+            return;
+        }
+
+        tickCounter++;
         List<ManagedNode> nodes = nodeRepository.findAll();
 
+        if (idleNodeIds.isEmpty() || tickCounter % ROTATE_EVERY_N_TICKS == 0) {
+            rotateIdleProfile(nodes);
+        }
+
         for (ManagedNode node : nodes) {
-            // ~1/3 of nodes behave as naturally idle-natured (mirrors real fleets:
-            // some servers genuinely are quiet). This is a usage PROFILE, not a
-            // pre-written verdict -- the detector still has to derive idleness
-            // itself by aggregating raw samples over a time window.
-            boolean idleProfile = Math.floorMod(node.getNodeId().hashCode(), 3) == 0;
+            boolean idleProfile = idleNodeIds.contains(node.getNodeId());
 
             double cpu = idleProfile ? rand.nextDouble() * 10 : 15 + rand.nextDouble() * 70;
             boolean hadTraffic = idleProfile ? rand.nextInt(100) < 5 : rand.nextInt(100) < 70;
 
             metricRepository.save(new NodeMetric(node.getNodeId(), cpu, hadTraffic));
 
-            // cosmetic only -- these fields on ManagedNode are for the /api/nodes
-            // display, NOT read by the detector. Kept so the API still shows
-            // "current" values without forcing every consumer to query history.
             node.setAvgCpuLoadLast15Min(cpu);
             node.setLastTrafficTimestamp(hadTraffic ? LocalDateTime.now() : node.getLastTrafficTimestamp());
         }
         nodeRepository.saveAll(nodes);
+    }
+
+    private void rotateIdleProfile(List<ManagedNode> nodes) {
+        idleNodeIds = new HashSet<>();
+        for (ManagedNode node : nodes) {
+            if (rand.nextInt(100) < 30) idleNodeIds.add(node.getNodeId());
+        }
+        System.out.println("SIMULATOR: rotated idle profile, " + idleNodeIds.size() + " nodes now idle-natured");
     }
 }

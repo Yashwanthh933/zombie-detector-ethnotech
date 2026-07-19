@@ -14,23 +14,25 @@ public class ManagedNode {
     private String instanceType;
     private double hourlyRate;
     private String environment;
+    private String ownerEmail;
 
-    private double avgCpuLoadLast15Min;       // display only -- NOT used by the detector
-    private LocalDateTime lastTrafficTimestamp; // display only -- NOT used by the detector
+    private double avgCpuLoadLast15Min;
+    private LocalDateTime lastTrafficTimestamp;
 
     private NodeStatus status;
     private LocalDateTime flaggedAt;
     private LocalDateTime gracePeriodEndsAt;
-    private int cleanStreak;                   // consecutive non-idle cycles while FLAGGED
-    private LocalDateTime manualOverrideUntil;  // human override window
+    private int cleanStreak;
+    private LocalDateTime manualOverrideUntil;
 
     public ManagedNode() {}
 
-    public ManagedNode(String nodeId, String instanceType, double hourlyRate, String environment) {
+    public ManagedNode(String nodeId, String instanceType, double hourlyRate, String environment, String ownerEmail) {
         this.nodeId = nodeId;
         this.instanceType = instanceType;
         this.hourlyRate = hourlyRate;
         this.environment = environment;
+        this.ownerEmail = ownerEmail;
         this.status = NodeStatus.RUNNING;
         this.lastTrafficTimestamp = LocalDateTime.now();
         this.cleanStreak = 0;
@@ -40,6 +42,7 @@ public class ManagedNode {
     public String getInstanceType() { return instanceType; }
     public double getHourlyRate() { return hourlyRate; }
     public String getEnvironment() { return environment; }
+    public String getOwnerEmail() { return ownerEmail; }
 
     public double getAvgCpuLoadLast15Min() { return avgCpuLoadLast15Min; }
     public void setAvgCpuLoadLast15Min(double v) { this.avgCpuLoadLast15Min = v; }

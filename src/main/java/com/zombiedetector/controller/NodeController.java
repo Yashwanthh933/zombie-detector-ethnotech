@@ -13,14 +13,17 @@ import org.springframework.web.bind.annotation.RestController;
 import com.zombiedetector.model.ManagedNode;
 import com.zombiedetector.model.NodeStatus;
 import com.zombiedetector.repository.NodeRepository;
+import com.zombiedetector.service.AuditService;
 
 @RestController
 public class NodeController {
 
     private final NodeRepository nodeRepository;
+    private final AuditService auditService;
 
-    public NodeController(NodeRepository nodeRepository) {
+    public NodeController(NodeRepository nodeRepository, AuditService auditService) {
         this.nodeRepository = nodeRepository;
+        this.auditService = auditService;
     }
 
     @GetMapping("/api/nodes")
@@ -52,8 +55,9 @@ public class NodeController {
                     node.setFlaggedAt(null);
                     node.setGracePeriodEndsAt(null);
                     node.setCleanStreak(0);
-                    node.setManualOverrideUntil(LocalDateTime.now().plusHours(24)); // 24h shield from re-flagging
+                    node.setManualOverrideUntil(LocalDateTime.now().plusHours(24));
                     nodeRepository.save(node);
+                    auditService.log("james.chen", "OVERRIDE", id, "SUCCESS", "Manual override, 24h shield applied");
                     return ResponseEntity.ok(node);
                 })
                 .orElse(ResponseEntity.notFound().build());

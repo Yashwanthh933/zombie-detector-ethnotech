@@ -35,40 +35,78 @@
 
  :: Spring Boot ::                (v4.1.0)
 
-2026-07-19T17:13:13.465+05:30  INFO 5979 --- [zombie-detector] [           main] c.z.ZombieDetectorApplication            : Starting ZombieDetectorApplication using Java 25.0.2 with PID 5979 (/Users/akulayashwanth/Desktop/zombie-detector/target/classes started by akulayashwanth in /Users/akulayashwanth/Desktop/zombie-detector)
-2026-07-19T17:13:13.466+05:30  INFO 5979 --- [zombie-detector] [           main] c.z.ZombieDetectorApplication            : No active profile set, falling back to 1 default profile: "default"
-2026-07-19T17:13:13.645+05:30  INFO 5979 --- [zombie-detector] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-07-19T17:13:13.661+05:30  INFO 5979 --- [zombie-detector] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 13 ms. Found 2 JPA repository interfaces.
-2026-07-19T17:13:13.785+05:30  INFO 5979 --- [zombie-detector] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
-2026-07-19T17:13:13.789+05:30  INFO 5979 --- [zombie-detector] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-07-19T17:13:13.790+05:30  INFO 5979 --- [zombie-detector] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.22]
-2026-07-19T17:13:13.804+05:30  INFO 5979 --- [zombie-detector] [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 320 ms
-2026-07-19T17:13:13.852+05:30  INFO 5979 --- [zombie-detector] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-07-19T17:13:13.918+05:30  INFO 5979 --- [zombie-detector] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:eeb38565-540a-472c-9085-4e90dfe1e461 user=SA
-2026-07-19T17:13:13.918+05:30  INFO 5979 --- [zombie-detector] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-07-19T17:13:13.930+05:30  INFO 5979 --- [zombie-detector] [           main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
-2026-07-19T17:13:13.951+05:30  INFO 5979 --- [zombie-detector] [           main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.1.Final
-2026-07-19T17:13:14.087+05:30  INFO 5979 --- [zombie-detector] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-07-19T17:13:14.115+05:30  INFO 5979 --- [zombie-detector] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
-	Database JDBC URL [jdbc:h2:mem:eeb38565-540a-472c-9085-4e90dfe1e461]
+2026-07-19T18:22:57.911+05:30  INFO 9771 --- [zombie-detector] [           main] c.z.ZombieDetectorApplication            : Starting ZombieDetectorApplication using Java 25.0.2 with PID 9771 (/Users/akulayashwanth/Desktop/zombie-detector/target/classes started by akulayashwanth in /Users/akulayashwanth/Desktop/zombie-detector)
+2026-07-19T18:22:57.912+05:30  INFO 9771 --- [zombie-detector] [           main] c.z.ZombieDetectorApplication            : No active profile set, falling back to 1 default profile: "default"
+2026-07-19T18:22:58.075+05:30  INFO 9771 --- [zombie-detector] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-07-19T18:22:58.090+05:30  INFO 9771 --- [zombie-detector] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 12 ms. Found 5 JPA repository interfaces.
+2026-07-19T18:22:58.201+05:30  INFO 9771 --- [zombie-detector] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 8080 (http)
+2026-07-19T18:22:58.205+05:30  INFO 9771 --- [zombie-detector] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-07-19T18:22:58.205+05:30  INFO 9771 --- [zombie-detector] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.22]
+2026-07-19T18:22:58.220+05:30  INFO 9771 --- [zombie-detector] [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 293 ms
+2026-07-19T18:22:58.260+05:30  INFO 9771 --- [zombie-detector] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-07-19T18:22:58.305+05:30  INFO 9771 --- [zombie-detector] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:a34a2b88-169f-459a-806f-78f3f2e78b26 user=SA
+2026-07-19T18:22:58.306+05:30  INFO 9771 --- [zombie-detector] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-07-19T18:22:58.315+05:30  INFO 9771 --- [zombie-detector] [           main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-07-19T18:22:58.329+05:30  INFO 9771 --- [zombie-detector] [           main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.4.1.Final
+2026-07-19T18:22:58.422+05:30  INFO 9771 --- [zombie-detector] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-07-19T18:22:58.442+05:30  INFO 9771 --- [zombie-detector] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:h2:mem:a34a2b88-169f-459a-806f-78f3f2e78b26]
 	Database driver: H2 JDBC Driver
 	Database dialect: H2Dialect
 	Database version: 2.4.240
-	Default catalog/schema: EEB38565-540A-472C-9085-4E90DFE1E461/PUBLIC
+	Default catalog/schema: A34A2B88-169F-459A-806F-78F3F2E78B26/PUBLIC
 	Autocommit mode: undefined/unknown
 	Isolation level: READ_COMMITTED [default READ_COMMITTED]
 	JDBC fetch size: 100
 	Pool: DataSourceConnectionProvider
 	Minimum pool size: undefined/unknown
 	Maximum pool size: undefined/unknown
-2026-07-19T17:13:14.364+05:30  INFO 5979 --- [zombie-detector] [           main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-07-19T17:13:14.376+05:30  INFO 5979 --- [zombie-detector] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-07-19T17:13:14.402+05:30  INFO 5979 --- [zombie-detector] [           main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-07-19T17:13:14.485+05:30  WARN 5979 --- [zombie-detector] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-07-19T17:13:14.575+05:30  INFO 5979 --- [zombie-detector] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
-2026-07-19T17:13:14.577+05:30  INFO 5979 --- [zombie-detector] [           main] c.z.ZombieDetectorApplication            : Started ZombieDetectorApplication in 1.225 seconds (process running for 1.336)
-SIMULATOR TICK at 2026-07-19T17:13:14.684769
-DETECTOR TICK at 2026-07-19T17:13:14.688716
+2026-07-19T18:22:58.661+05:30  INFO 9771 --- [zombie-detector] [           main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-07-19T18:22:58.673+05:30  INFO 9771 --- [zombie-detector] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-07-19T18:22:58.692+05:30  INFO 9771 --- [zombie-detector] [           main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-07-19T18:22:58.776+05:30  WARN 9771 --- [zombie-detector] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-07-19T18:22:58.858+05:30  INFO 9771 --- [zombie-detector] [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 8080 (http) with context path '/'
+2026-07-19T18:22:58.860+05:30  INFO 9771 --- [zombie-detector] [           main] c.z.ZombieDetectorApplication            : Started ZombieDetectorApplication in 1.055 seconds (process running for 1.156)
+SIMULATOR: rotated idle profile, 0 nodes now idle-natured
+DETECTOR TICK at 2026-07-19T18:22:58.963914
 Seeded 20 nodes.
-SIMULATOR TICK at 2026-07-19T17:13:24.694029
-SIMULATOR TICK at 2026-07-19T17:13:34.749464
+SIMULATOR: rotated idle profile, 1 nodes now idle-natured
+DETECTOR TICK at 2026-07-19T18:23:28.987447
+DETECTOR TICK at 2026-07-19T18:23:59.018978
+FLAGGED: node-8 - Idle: CPU stayed below 15.0% and zero traffic across 5 samples over the last 2 min
+DETECTOR TICK at 2026-07-19T18:24:29.053482
+RECOVERING (streak 1/3): node-8
+DETECTOR TICK at 2026-07-19T18:24:59.074460
+RECOVERING (streak 2/3): node-8
+DETECTOR TICK at 2026-07-19T18:25:29.093423
+RECOVERED: node-8
+SIMULATOR: rotated idle profile, 7 nodes now idle-natured
+DETECTOR TICK at 2026-07-19T18:25:59.110783
+DETECTOR TICK at 2026-07-19T18:26:29.127717
+2026-07-19T18:26:44.550+05:30  INFO 9771 --- [zombie-detector] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-07-19T18:26:44.551+05:30  INFO 9771 --- [zombie-detector] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-07-19T18:26:44.552+05:30  INFO 9771 --- [zombie-detector] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+DETECTOR TICK at 2026-07-19T18:26:59.144604
+DETECTOR TICK at 2026-07-19T18:27:29.162112
+DETECTOR TICK at 2026-07-19T18:27:59.174758
+FLAGGED: node-3 - Idle: CPU stayed below 15.0% and zero traffic across 12 samples over the last 2 min
+FLAGGED: node-5 - Idle: CPU stayed below 15.0% and zero traffic across 12 samples over the last 2 min
+FLAGGED: node-6 - Idle: CPU stayed below 15.0% and zero traffic across 12 samples over the last 2 min
+FLAGGED: node-10 - Idle: CPU stayed below 15.0% and zero traffic across 12 samples over the last 2 min
+SIMULATOR PAUSED - skipping tick
+DETECTOR TICK at 2026-07-19T18:28:29.193597
+HOLDING (PROD, needs manual review): node-3
+RECOVERING (streak 1/3): node-5
+HOLDING (PROD, needs manual review): node-6
+STOPPED: node-10 - Monthly savings: $69.12
+DETECTOR TICK at 2026-07-19T18:28:59.229727
+HOLDING (PROD, needs manual review): node-3
+RECOVERING (streak 2/3): node-5
+HOLDING (PROD, needs manual review): node-6
+FLAGGED: node-7 - Idle: CPU stayed below 15.0% and zero traffic across 11 samples over the last 2 min
+SIMULATOR: rotated idle profile, 4 nodes now idle-natured
+DETECTOR TICK at 2026-07-19T18:29:29.247691
+RECOVERING (streak 1/3): node-3
+RECOVERED: node-5
+HOLDING (PROD, needs manual review): node-6
+RECOVERING (streak 1/3): node-7
