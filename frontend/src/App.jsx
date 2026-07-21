@@ -1,255 +1,82 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import './index.css'
+import Dashboard from './pages/Dashboard'
+import Alerts from './pages/Alerts'
+import AuditTrail from './pages/AuditTrail'
+import Policies from './pages/Policies'
+import logo from '/logo.svg'
 
-const API = 'http://localhost:8080/api'
-
-function StatCard({ label, value, tone }) {
-  return (
-    <div className={`stat-card ${tone || ''}`}>
-      <p className="stat-label">{label}</p>
-      <p className="stat-value">{value}</p>
-    </div>
-  )
-}
-
-function StatusBadge({ status }) {
-  const toneMap = { RUNNING: 'success', FLAGGED: 'warning', STOPPED: 'danger' }
-  return <span className={`badge ${toneMap[status] || ''}`}>{status.toLowerCase()}</span>
-}
-
-function Dashboard() {
-  const [nodes, setNodes] = useState([])
-  const [savings, setSavings] = useState({ stoppedCount: 0, monthlySavings: 0 })
-  const [schedulerPaused, setSchedulerPaused] = useState(false)
-
-  const refresh = useCallback(async () => {
-    const [nodesRes, savingsRes, schedRes] = await Promise.all([
-      fetch(`${API}/nodes`), fetch(`${API}/savings`), fetch(`${API}/scheduler/status`)
-    ])
-    setNodes(await nodesRes.json())
-    setSavings(await savingsRes.json())
-    setSchedulerPaused((await schedRes.json()).paused)
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, 5000)
-    return () => clearInterval(id)
-  }, [refresh])
-
-  const toggleScheduler = async () => {
-    await fetch(`${API}/scheduler/${schedulerPaused ? 'resume' : 'pause'}`, { method: 'POST' })
-    refresh()
-  }
-
-  const override = async (nodeId) => {
-    await fetch(`${API}/nodes/${nodeId}/override`, { method: 'POST' })
-    refresh()
-  }
-
-  const running = nodes.filter(n => n.status === 'RUNNING').length
-  const flagged = nodes.filter(n => n.status === 'FLAGGED').length
-
-  return (
-    <div>
-      <div className="stat-grid">
-        <StatCard label="Monthly savings" value={`$${savings.monthlySavings.toFixed(2)}`} tone="success" />
-        <StatCard label="Running" value={running} />
-        <StatCard label="Needs review" value={flagged} tone="warning" />
-        <StatCard label="Stopped" value={savings.stoppedCount} tone="danger" />
-      </div>
-
-      <div className="panel-header">
-        <p className="panel-title">Nodes</p>
-        <button onClick={toggleScheduler}>
-          {schedulerPaused ? 'Resume scheduler' : 'Pause scheduler'}
-        </button>
-      </div>
-
-      <div className="card">
-        {nodes.map(n => (
-          <div key={n.nodeId} className="row">
-            <div className="row-main">
-              <span className="node-id">{n.nodeId}</span>
-              {n.environment === 'PROD' && <span className="tag">prod</span>}
-              <span className="owner">{n.ownerEmail}</span>
-            </div>
-            <div className="row-side">
-              <span className="cpu">{n.avgCpuLoadLast15Min?.toFixed(1)}% cpu</span>
-              <StatusBadge status={n.status} />
-              {n.status === 'FLAGGED' && (
-                <button className="small" onClick={() => override(n.nodeId)}>Override</button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function Alerts() {
-  const [alerts, setAlerts] = useState([])
-
-  const refresh = useCallback(async () => {
-    setAlerts(await (await fetch(`${API}/alerts`)).json())
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    const id = setInterval(refresh, 5000)
-    return () => clearInterval(id)
-  }, [refresh])
-
-  const ack = async (id) => {
-    await fetch(`${API}/alerts/${id}/ack`, { method: 'POST' })
-    refresh()
-  }
-
-  const active = alerts.filter(a => !a.acknowledged)
-  const acknowledged = alerts.filter(a => a.acknowledged)
-
-  return (
-    <div>
-      <p className="panel-title">Active</p>
-      <div className="card">
-        {active.length === 0 && <p className="empty">No active alerts</p>}
-        {active.map(a => (
-          <div key={a.id} className={`alert alert-${a.severity.toLowerCase()}`}>
-            <div>
-              <p className="alert-title">{a.title}</p>
-              <p className="alert-message">{a.message}</p>
-            </div>
-            <button className="small" onClick={() => ack(a.id)}>Acknowledge</button>
-          </div>
-        ))}
-      </div>
-
-      {acknowledged.length > 0 && (
-        <>
-          <p className="panel-title" style={{ marginTop: '1.5rem' }}>Acknowledged</p>
-          <div className="card">
-            {acknowledged.map(a => (
-              <div key={a.id} className="alert dim">
-                <div>
-                  <p className="alert-title">{a.title}</p>
-                  <p className="alert-message">{a.message}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function AuditTrail() {
-  const [events, setEvents] = useState([])
-
-  useEffect(() => {
-    fetch(`${API}/audit`).then(r => r.json()).then(setEvents)
-    const id = setInterval(() => {
-      fetch(`${API}/audit`).then(r => r.json()).then(setEvents)
-    }, 5000)
-    return () => clearInterval(id)
-  }, [])
-
-  return (
-    <div className="card">
-      {events.map(e => (
-        <div key={e.id} className="row">
-          <div className="row-main">
-            <span className="timestamp">{e.timestamp?.replace('T', ' ').slice(0, 19)}</span>
-            <span className="node-id">{e.action}</span>
-            <span className="owner">{e.targetNodeId}</span>
-          </div>
-          <span className="details">{e.details}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function Policies() {
-  const [policy, setPolicy] = useState(null)
-  const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    fetch(`${API}/policy`).then(r => r.json()).then(setPolicy)
-  }, [])
-
-  if (!policy) return <p className="empty">Loading...</p>
-
-  const update = (field, value) => setPolicy({ ...policy, [field]: value })
-
-  const save = async () => {
-    await fetch(`${API}/policy`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(policy)
-    })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  return (
-    <div className="card" style={{ padding: '1.25rem' }}>
-      <label className="field">
-        <span>CPU threshold (%)</span>
-        <input type="number" value={policy.cpuThreshold}
-          onChange={e => update('cpuThreshold', parseFloat(e.target.value))} />
-      </label>
-      <label className="field">
-        <span>Idle window (minutes)</span>
-        <input type="number" value={policy.idleWindowMinutes}
-          onChange={e => update('idleWindowMinutes', parseInt(e.target.value))} />
-      </label>
-      <label className="field">
-        <span>Minimum samples required</span>
-        <input type="number" value={policy.minSamplesRequired}
-          onChange={e => update('minSamplesRequired', parseInt(e.target.value))} />
-      </label>
-      <label className="field">
-        <span>Recovery strikes required</span>
-        <input type="number" value={policy.recoveryStrikesRequired}
-          onChange={e => update('recoveryStrikesRequired', parseInt(e.target.value))} />
-      </label>
-      <label className="field">
-        <span>Grace period (seconds)</span>
-        <input type="number" value={policy.gracePeriodSeconds}
-          onChange={e => update('gracePeriodSeconds', parseInt(e.target.value))} />
-      </label>
-      <button onClick={save}>{saved ? 'Saved' : 'Save policy'}</button>
-    </div>
-  )
-}
-
-export default function App() {
+function App() {
   const [tab, setTab] = useState('dashboard')
+
   const tabs = [
-    ['dashboard', 'Dashboard'], ['alerts', 'Alerts'],
-    ['audit', 'Audit trail'], ['policies', 'Policies']
+    { key: 'dashboard', label: 'Dashboard', icon: '☁️' },
+    { key: 'alerts', label: 'Alerts', icon: '⚠️' },
+    { key: 'audit', label: 'Audit Trail', icon: '📋' },
+    { key: 'policies', label: 'Policies', icon: '⚙️' }
   ]
 
   return (
-    <div className="app">
-      <header className="header">
-        <span className="brand">Zombie detector</span>
-        <nav className="tabs">
-          {tabs.map(([key, label]) => (
-            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
-              {label}
-            </button>
-          ))}
-        </nav>
+    <div className="min-h-screen bg-linear-to-br from-sky-50 via-blue-50/30 to-indigo-50/50 text-slate-800">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-xs sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Brand */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-linear-to-br from-sky-400 to-blue-600 flex items-center justify-center text-white text-xl shadow-md shadow-sky-200 overflow-hidden">
+                <img src={logo} alt="FinOps Sentinel logo" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <h1 className="text-lg font-black text-slate-800 tracking-tight">FinOps Sentinel</h1>
+                <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Zombie VM Detector</p>
+              </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <nav className="flex gap-1.5 bg-slate-100/80 rounded-2xl p-1.5 shadow-inner border border-slate-200/50">
+              {tabs.map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`
+                    flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer
+                    ${tab === key
+                      ? 'bg-white text-sky-700 shadow-sm shadow-sky-200/50 scale-102'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
+                    }
+                  `}
+                >
+                  <span className="text-sm">{icon}</span>
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            {/* Live Status Indicator */}
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200/80 rounded-full px-4 py-2 shadow-2xs">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-bold text-emerald-800">Live</span>
+              <span className="text-[11px] text-slate-400 font-medium">· 5s sync</span>
+            </div>
+          </div>
+        </div>
       </header>
-      <main>
-        {tab === 'dashboard' && <Dashboard />}
-        {tab === 'alerts' && <Alerts />}
-        {tab === 'audit' && <AuditTrail />}
-        {tab === 'policies' && <Policies />}
+
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="animate-fadeIn">
+          {tab === 'dashboard' && <Dashboard />}
+          {tab === 'alerts' && <Alerts />}
+          {tab === 'audit' && <AuditTrail />}
+          {tab === 'policies' && <Policies />}
+        </div>
       </main>
     </div>
   )
 }
+
+export default App
