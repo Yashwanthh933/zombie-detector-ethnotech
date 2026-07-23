@@ -93,18 +93,21 @@ function Dashboard() {
     }
 
     const normalizedChartData = normalizeChartData(chartData)
-    const fallbackChartData = Array.from({ length: 7 }, (_, index) => {
-        const baseSavings = Math.max(80, (savings.monthlySavings || 1200) / 30)
-        const baseWaste = Math.max(40, baseSavings * 0.45)
-        const day = new Date()
-        day.setDate(day.getDate() - (6 - index))
+    const fallbackChartData = normalizedChartData.length > 0
+        ? []
+        : Array.from({ length: 7 }, (_, index) => {
+            const monthlySavings = Number(savings.monthlySavings || 0)
+            const dailySavings = monthlySavings > 0 ? monthlySavings / 30 : 0f
+            const dailyWaste = dailySavings > 0 ? dailySavings * 0.18 : 0
+            const day = new Date()
+            day.setDate(day.getDate() - (6 - index))
 
-        return {
-            date: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            savings: Math.round(baseSavings + index * 18),
-            waste: Math.round(baseWaste + index * 8)
-        }
-    })
+            return {
+                date: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                savings: Number((dailySavings * (1 + index * 0.05)).toFixed(2)),
+                waste: Number((dailyWaste * (0.9 + index * 0.02)).toFixed(2))
+            }
+        })
     const displayChartData = normalizedChartData.length > 0 ? normalizedChartData : fallbackChartData
 
     return (
@@ -222,28 +225,34 @@ function Dashboard() {
                         </span>
                     </div>
                 </div>
-                <ResponsiveContainer width="100%" height={280}>
-                    <AreaChart data={displayChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorSavings" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                                <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                            </linearGradient>
-                            <linearGradient id="colorWaste" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#fb7185" stopOpacity={0.4} />
-                                <stop offset="95%" stopColor="#fb7185" stopOpacity={0.0} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                        <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} />
-                        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)' }}
-                        />
-                        <Area type="monotone" dataKey="savings" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSavings)" />
-                        <Area type="monotone" dataKey="waste" stroke="#fb7185" strokeWidth={2.5} fillOpacity={1} fill="url(#colorWaste)" />
-                    </AreaChart>
-                </ResponsiveContainer>
+                {displayChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={280}>
+                        <AreaChart data={displayChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorSavings" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                                </linearGradient>
+                                <linearGradient id="colorWaste" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#fb7185" stopOpacity={0.4} />
+                                    <stop offset="95%" stopColor="#fb7185" stopOpacity={0.0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} />
+                            <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)' }}
+                            />
+                            <Area type="monotone" dataKey="savings" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSavings)" />
+                            <Area type="monotone" dataKey="waste" stroke="#fb7185" strokeWidth={2.5} fillOpacity={1} fill="url(#colorWaste)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="flex h-70 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
+                        <p className="text-sm text-slate-500">No savings history yet. The chart will appear once the backend starts returning savings and waste data.</p>
+                    </div>
+                )}
             </div>
 
             {/* Live Snapshot & Node Inventory Section */}
