@@ -10,4 +10,5 @@ import com.zombiedetector.model.NodeMetric;
 public interface NodeMetricRepository extends JpaRepository<NodeMetric, Long> {
     List<NodeMetric> findByNodeIdAndTimestampAfter(String nodeId, LocalDateTime cutoff);
     long deleteByTimestampBefore(LocalDateTime cutoff);
+    long deleteByNodeId(String nodeId);
 }

@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -47,74 +48,90 @@ public class ZombieDetector {
 
         System.out.println("DETECTOR TICK at " + LocalDateTime.now());
         Policy policy = policyService.getCurrentPolicy();
-        List<ManagedNode> nodes = nodeRepository.findAll();
 
-        for (ManagedNode node : nodes) {
-            if (node.getStatus() == NodeStatus.STOPPED) continue;
+        // Work from ids and re-read each node right before judging it. Holding one big list for the
+        // whole tick meant a manual override, or a node a user just deleted, could be overwritten
+        // (or re-created) by a stale save at the end of the loop.
+        List<String> nodeIds = nodeRepository.findAll().stream().map(ManagedNode::getNodeId).toList();
 
-            if (node.getManualOverrideUntil() != null
-                    && LocalDateTime.now().isBefore(node.getManualOverrideUntil())) {
-                continue;
+        for (String nodeId : nodeIds) {
+            Optional<ManagedNode> fresh = nodeRepository.findById(nodeId);
+            if (fresh.isEmpty()) continue; // removed since the tick started
+
+            ManagedNode node = fresh.get();
+            try {
+                evaluateNode(node, policy);
+                nodeRepository.save(node);
+            } catch (OptimisticLockingFailureException ex) {
+                System.out.println("DETECTOR: skipped " + nodeId + " this tick (modified concurrently)");
             }
+        }
+    }
 
-            Optional<String> reason = checkIfZombie(node, policy);
+    private void evaluateNode(ManagedNode node, Policy policy) {
+        if (node.getStatus() == NodeStatus.STOPPED) return;
 
-            if (reason.isPresent() && node.getStatus() == NodeStatus.RUNNING) {
-                node.setStatus(NodeStatus.FLAGGED);
-                node.setFlaggedAt(LocalDateTime.now());
-                node.setGracePeriodEndsAt(LocalDateTime.now().plusSeconds(policy.getGracePeriodSeconds()));
-                node.setCleanStreak(0);
-                System.out.println("FLAGGED: " + node.getNodeId() + " - " + reason.get());
-                auditService.log("scheduler", "FLAGGED", node.getNodeId(), "SUCCESS", reason.get());
+        if (node.getManualOverrideUntil() != null
+                && LocalDateTime.now().isBefore(node.getManualOverrideUntil())) {
+            return;
+        }
 
-            } else if (node.getStatus() == NodeStatus.FLAGGED) {
-                if (reason.isEmpty()) {
-                    node.setCleanStreak(node.getCleanStreak() + 1);
-                    if (node.getCleanStreak() >= policy.getRecoveryStrikesRequired()) {
-                        node.setStatus(NodeStatus.RUNNING);
-                        node.setFlaggedAt(null);
-                        node.setGracePeriodEndsAt(null);
-                        node.setCleanStreak(0);
-                        System.out.println("RECOVERED: " + node.getNodeId());
-                        auditService.log("scheduler", "RECOVERED", node.getNodeId(), "SUCCESS",
-                                "Usage returned to normal");
-                    } else {
-                        System.out.println("RECOVERING (streak " + node.getCleanStreak() + "/"
-                                + policy.getRecoveryStrikesRequired() + "): " + node.getNodeId());
-                    }
-                } else {
+        Optional<String> reason = checkIfZombie(node, policy);
+
+        if (reason.isPresent() && node.getStatus() == NodeStatus.RUNNING) {
+            node.setStatus(NodeStatus.FLAGGED);
+            node.setFlaggedAt(LocalDateTime.now());
+            node.setGracePeriodEndsAt(LocalDateTime.now().plusSeconds(policy.getGracePeriodSeconds()));
+            node.setCleanStreak(0);
+            System.out.println("FLAGGED: " + node.getNodeId() + " - " + reason.get());
+            auditService.log("scheduler", "FLAGGED", node.getNodeId(), "SUCCESS", reason.get());
+
+        } else if (node.getStatus() == NodeStatus.FLAGGED) {
+            if (reason.isEmpty()) {
+                node.setCleanStreak(node.getCleanStreak() + 1);
+                if (node.getCleanStreak() >= policy.getRecoveryStrikesRequired()) {
+                    node.setStatus(NodeStatus.RUNNING);
+                    node.setFlaggedAt(null);
+                    node.setGracePeriodEndsAt(null);
                     node.setCleanStreak(0);
+                    System.out.println("RECOVERED: " + node.getNodeId());
+                    auditService.log("scheduler", "RECOVERED", node.getNodeId(), "SUCCESS",
+                            "Usage returned to normal");
+                } else {
+                    System.out.println("RECOVERING (streak " + node.getCleanStreak() + "/"
+                            + policy.getRecoveryStrikesRequired() + "): " + node.getNodeId());
+                }
+            } else {
+                node.setCleanStreak(0);
 
-                    if (LocalDateTime.now().isAfter(node.getGracePeriodEndsAt())) {
-                        if (node.getEnvironment().equals("PROD")) {
-                            System.out.println("HOLDING (PROD, needs manual review): " + node.getNodeId());
+                if (LocalDateTime.now().isAfter(node.getGracePeriodEndsAt())) {
+                    if (node.getEnvironment().equals("PROD")) {
+                        System.out.println("HOLDING (PROD, needs manual review): " + node.getNodeId());
 
-                            long heldSeconds = java.time.Duration.between(node.getFlaggedAt(), LocalDateTime.now()).getSeconds();
-                            if (heldSeconds > PROD_HOLD_ALERT_SECONDS) {
-                                alertService.raiseIfNotDuplicate("CRITICAL",
-                                        "PROD node needs manual review",
-                                        node.getNodeId() + " has been idle and held for over "
-                                                + PROD_HOLD_ALERT_SECONDS + "s. Owner: " + node.getOwnerEmail(),
-                                        node.getNodeId());
-                            }
-                        } else {
-                            node.setStatus(NodeStatus.STOPPED);
-                            double monthlySavings = node.getHourlyRate() * 24 * 30;
-                            System.out.printf("STOPPED: %s - Monthly savings: $%.2f%n",
-                                    node.getNodeId(), monthlySavings);
-                            auditService.log("scheduler", "STOPPED", node.getNodeId(), "SUCCESS",
-                                    String.format("Monthly savings: $%.2f, owner: %s", monthlySavings, node.getOwnerEmail()));
-                            alertService.raiseIfNotDuplicate("INFO",
-                                    "Cost optimization applied",
-                                    node.getNodeId() + " stopped, saving $" + String.format("%.2f", monthlySavings)
-                                            + "/mo. Owner: " + node.getOwnerEmail(),
+                        long heldSeconds = java.time.Duration.between(node.getFlaggedAt(), LocalDateTime.now()).getSeconds();
+                        if (heldSeconds > PROD_HOLD_ALERT_SECONDS) {
+                            alertService.raiseIfNotDuplicate("CRITICAL",
+                                    "PROD node needs manual review",
+                                    node.getNodeId() + " has been idle and held for over "
+                                            + PROD_HOLD_ALERT_SECONDS + "s. Owner: " + node.getOwnerEmail(),
                                     node.getNodeId());
                         }
+                    } else {
+                        node.setStatus(NodeStatus.STOPPED);
+                        double monthlySavings = node.getHourlyRate() * 24 * 30;
+                        System.out.printf("STOPPED: %s - Monthly savings: $%.2f%n",
+                                node.getNodeId(), monthlySavings);
+                        auditService.log("scheduler", "STOPPED", node.getNodeId(), "SUCCESS",
+                                String.format("Monthly savings: $%.2f, owner: %s", monthlySavings, node.getOwnerEmail()));
+                        alertService.raiseIfNotDuplicate("INFO",
+                                "Cost optimization applied",
+                                node.getNodeId() + " stopped, saving $" + String.format("%.2f", monthlySavings)
+                                        + "/mo. Owner: " + node.getOwnerEmail(),
+                                node.getNodeId());
                     }
                 }
             }
         }
-        nodeRepository.saveAll(nodes);
     }
 
     private Optional<String> checkIfZombie(ManagedNode node, Policy policy) {

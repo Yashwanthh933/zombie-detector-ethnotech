@@ -1,0 +1,39 @@
+# Render Blueprint: creates the API (Docker) + a Postgres database and wires them together.
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+# After the first deploy, set ADMIN_EMAIL / ADMIN_PASSWORD when prompted (they are never stored in git).
+databases:
+  - name: zombie-db
+    databaseName: zombie
+    user: zombie
+    plan: free          # free Postgres instances on Render expire after a trial period; use a paid plan to keep data
+
+services:
+  - type: web
+    name: zombie-detector-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: postgres
+      - key: DB_HOST
+        fromDatabase: { name: zombie-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: zombie-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: zombie-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: zombie-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: zombie-db, property: password }
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Optional: your custom frontend domain, if you add one.
+      # - key: CORS_EXTRA_ORIGINS
+      #   value: https://app.example.com

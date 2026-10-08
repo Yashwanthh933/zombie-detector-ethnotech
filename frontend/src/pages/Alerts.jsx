@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-
-const API = 'http://localhost:8080/api'
+import { apiFetch, readError } from '../api'
 
 function Alerts() {
     const [alerts, setAlerts] = useState([])
+    const [error, setError] = useState('')
 
     const refresh = useCallback(async () => {
         try {
-            const res = await fetch(`${API}/alerts`)
+            const res = await apiFetch('/alerts')
             if (res.ok) setAlerts(await res.json())
         } catch (err) {
             console.error('Failed to load backend alerts', err)
@@ -21,7 +21,13 @@ function Alerts() {
     }, [refresh])
 
     const ack = async (id) => {
-        await fetch(`${API}/alerts/${id}/ack`, { method: 'POST' })
+        setError('')
+        try {
+            const res = await apiFetch(`/alerts/${id}/ack`, { method: 'POST' })
+            if (!res.ok) setError(await readError(res, 'Could not acknowledge the alert.'))
+        } catch {
+            setError('Cannot reach the server.')
+        }
         refresh()
     }
 
@@ -29,13 +35,14 @@ function Alerts() {
     const acknowledged = alerts.filter(a => a.acknowledged)
 
     const severityColors = {
-        HIGH: 'border-rose-400 bg-rose-50/80',
-        MEDIUM: 'border-amber-400 bg-amber-50/80',
-        LOW: 'border-sky-400 bg-sky-50/80'
+        CRITICAL: 'border-rose-400 bg-rose-50/80',
+        WARNING: 'border-amber-400 bg-amber-50/80',
+        INFO: 'border-sky-400 bg-sky-50/80'
     }
 
     return (
         <div className="space-y-6 animate-fadeIn">
+            {error && <p role="alert" className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{error}</p>}
             <div>
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                     <span className="text-2xl">🔔</span> Active System Alerts

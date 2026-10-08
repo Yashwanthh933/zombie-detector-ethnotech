@@ -6,43 +6,31 @@ import {
 import StatCard from '../components/StatCard'
 import StatusBadge from '../components/StatusBadge'
 import vm from '/vm.svg'
-
-const API = 'http://localhost:8080/api'
+import { apiFetch, readError } from '../api'
+import { useAuth } from '../context/auth'
 
 function Dashboard() {
+    const { user } = useAuth()
+    const isAdmin = user?.role === 'ADMIN'
     const [nodes, setNodes] = useState([])
     const [savings, setSavings] = useState({ stoppedCount: 0, monthlySavings: 0 })
     const [chartData, setChartData] = useState([])
-    const [liveSnapshot, setLiveSnapshot] = useState({ avgCpu: 0, avgMemory: 0, totalNet: '0.0', regions: 0 })
     const [schedulerPaused, setSchedulerPaused] = useState(false)
+    const [actionError, setActionError] = useState('')
 
     const refresh = useCallback(async () => {
         try {
-            const [nodesRes, savingsRes, schedRes, chartRes, snapshotRes] = await Promise.all([
-                fetch(`${API}/nodes`),
-                fetch(`${API}/savings`),
-                fetch(`${API}/scheduler/status`),
-                fetch(`${API}/savings/history`).catch(() => null),
-                fetch(`${API}/snapshot/live`).catch(() => null)
+            const [nodesRes, savingsRes, schedRes, chartRes] = await Promise.all([
+                apiFetch('/nodes'),
+                apiFetch('/savings'),
+                apiFetch('/scheduler/status'),
+                apiFetch('/savings/history')
             ])
 
             if (nodesRes.ok) setNodes(await nodesRes.json())
             if (savingsRes.ok) setSavings(await savingsRes.json())
-
-            if (schedRes.ok) {
-                const schedData = await schedRes.json()
-                setSchedulerPaused(schedData.paused)
-            }
-
-            if (chartRes && chartRes.ok) {
-                setChartData(await chartRes.json())
-            }
-
-            // Real-time backend live snapshot fetch
-            if (snapshotRes && snapshotRes.ok) {
-                const snapData = await snapshotRes.json()
-                setLiveSnapshot(snapData)
-            }
+            if (schedRes.ok) setSchedulerPaused((await schedRes.json()).paused)
+            if (chartRes.ok) setChartData(await chartRes.json())
         } catch (err) {
             console.error('Backend connection error:', err)
         }
@@ -50,65 +38,46 @@ function Dashboard() {
 
     useEffect(() => {
         refresh()
-        const id = setInterval(refresh, 2500) // Polls every 2.5s for live updates
+        const id = setInterval(refresh, 5000)
         return () => clearInterval(id)
     }, [refresh])
 
-    const toggleScheduler = async () => {
-        await fetch(`${API}/scheduler/${schedulerPaused ? 'resume' : 'pause'}`, { method: 'POST' })
+    const runAction = async (path, failMessage) => {
+        setActionError('')
+        try {
+            const res = await apiFetch(path, { method: 'POST' })
+            if (!res.ok) setActionError(await readError(res, failMessage))
+        } catch {
+            setActionError('Cannot reach the server.')
+        }
         refresh()
     }
 
-    const override = async (nodeId) => {
-        await fetch(`${API}/nodes/${nodeId}/override`, { method: 'POST' })
-        refresh()
-    }
+    const toggleScheduler = () =>
+        runAction(`/scheduler/${schedulerPaused ? 'resume' : 'pause'}`, 'Could not change the scheduler state.')
+
+    const override = (nodeId) =>
+        runAction(`/nodes/${nodeId}/override`, 'Could not override this node.')
 
     const running = nodes.filter(n => n.status === 'RUNNING').length
     const flagged = nodes.filter(n => n.status === 'FLAGGED').length
 
-    // Fallback calculation if backend liveSnapshot endpoint isn't wired yet
-    const computedCpu = nodes.length > 0
+    const monthlyCost = (n) => (n.hourlyRate || 0) * 24 * 30
+    const avgCpu = nodes.length > 0
         ? (nodes.reduce((acc, n) => acc + (n.avgCpuLoadLast15Min || 0), 0) / nodes.length).toFixed(0)
-        : liveSnapshot.avgCpu
+        : '0'
+    const runningCost = nodes.filter(n => n.status === 'RUNNING').reduce((acc, n) => acc + monthlyCost(n), 0)
+    const atRiskCost = nodes.filter(n => n.status === 'FLAGGED').reduce((acc, n) => acc + monthlyCost(n), 0)
+    const prodCount = nodes.filter(n => n.environment === 'PROD').length
 
-    const normalizeChartData = (data) => {
-        if (!Array.isArray(data)) return []
-
-        return data
-            .map((entry) => {
-                if (!entry) return null
-
-                const savings = Number(entry.savings ?? entry.amount ?? entry.saved ?? entry.value ?? 0)
-                const waste = Number(entry.waste ?? entry.cost ?? entry.spent ?? 0)
-                const date = entry.date || entry.day || entry.label || entry.timestamp || ''
-
-                return {
-                    date: date ? String(date) : '',
-                    savings: Number.isFinite(savings) ? savings : 0,
-                    waste: Number.isFinite(waste) ? waste : 0
-                }
-            })
-            .filter(Boolean)
-    }
-
-    const normalizedChartData = normalizeChartData(chartData)
-    const fallbackChartData = normalizedChartData.length > 0
-        ? []
-        : Array.from({ length: 7 }, (_, index) => {
-            const monthlySavings = Number(savings.monthlySavings || 0)
-            const dailySavings = monthlySavings > 0 ? monthlySavings / 30 : 0f
-            const dailyWaste = dailySavings > 0 ? dailySavings * 0.18 : 0
-            const day = new Date()
-            day.setDate(day.getDate() - (6 - index))
-
-            return {
-                date: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                savings: Number((dailySavings * (1 + index * 0.05)).toFixed(2)),
-                waste: Number((dailyWaste * (0.9 + index * 0.02)).toFixed(2))
-            }
-        })
-    const displayChartData = normalizedChartData.length > 0 ? normalizedChartData : fallbackChartData
+    const chartRows = Array.isArray(chartData)
+        ? chartData.map(entry => ({
+            date: String(entry.date || '').slice(5), // MM-DD
+            savings: Number(entry.savings) || 0,
+            waste: Number(entry.waste) || 0
+        }))
+        : []
+    const hasChartActivity = chartRows.some(r => r.savings > 0 || r.waste > 0)
 
     return (
         <div className="space-y-6 animate-fadeIn">
@@ -152,19 +121,29 @@ function Dashboard() {
                         <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                             <span>🖥️</span> Node Inventory Status
                         </h3>
-                        <button
-                            onClick={toggleScheduler}
-                            className={`
-                                    px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-300 shadow-2xs cursor-pointer
-                                    ${schedulerPaused
-                                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                                    : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                                }
-                                `}
-                        >
-                            {schedulerPaused ? '▶ Resume Scheduler' : '⏸ Pause Scheduler'}
-                        </button>
+                        {isAdmin ? (
+                            <button
+                                onClick={toggleScheduler}
+                                className={`
+                                        px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-300 shadow-2xs cursor-pointer
+                                        ${schedulerPaused
+                                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                                        : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                                    }
+                                    `}
+                            >
+                                {schedulerPaused ? '▶ Resume Scheduler' : '⏸ Pause Scheduler'}
+                            </button>
+                        ) : (
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${schedulerPaused ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                {schedulerPaused ? 'Automation paused by admin' : 'Automation active'}
+                            </span>
+                        )}
                     </div>
+
+                    {actionError && (
+                        <p role="alert" className="mb-3 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{actionError}</p>
+                    )}
 
                     <div className="space-y-2.5 max-h-150 overflow-y-auto pr-1 custom-scrollbar">
                         {nodes.map((n, idx) => (
@@ -200,7 +179,7 @@ function Dashboard() {
                         ))}
                         {nodes.length === 0 && (
                             <div className="text-center py-12 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                                <p className="text-slate-400 font-medium text-sm">No backend nodes found. Verify Spring Boot is running on port 8080.</p>
+                                <p className="text-slate-400 font-medium text-sm">No resources yet. Add one from the Resources tab to start monitoring it.</p>
                             </div>
                         )}
                     </div>
@@ -211,8 +190,8 @@ function Dashboard() {
             <div className="bg-white/85 backdrop-blur-md rounded-2xl shadow-sm border border-sky-100 p-6 transition-all hover:shadow-md">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h3 className="text-lg font-bold text-slate-800">30-Day Cost Savings</h3>
-                        <p className="text-sm text-slate-500">Cloud spend optimization performance</p>
+                        <h3 className="text-lg font-bold text-slate-800">Last 7 Days: Savings vs Idle Waste</h3>
+                        <p className="text-sm text-slate-500">Daily cost (USD/day) of stopped nodes vs. flagged-but-still-running nodes</p>
                     </div>
                     <div className="flex items-center gap-4 text-sm font-medium">
                         <span className="flex items-center gap-2">
@@ -225,9 +204,9 @@ function Dashboard() {
                         </span>
                     </div>
                 </div>
-                {displayChartData.length > 0 ? (
+                {hasChartActivity ? (
                     <ResponsiveContainer width="100%" height={280}>
-                        <AreaChart data={displayChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <AreaChart data={chartRows} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorSavings" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -250,7 +229,7 @@ function Dashboard() {
                     </ResponsiveContainer>
                 ) : (
                     <div className="flex h-70 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
-                        <p className="text-sm text-slate-500">No savings history yet. The chart will appear once the backend starts returning savings and waste data.</p>
+                        <p className="text-sm text-slate-500">No savings history yet. Nodes that get flagged or stopped will show up here.</p>
                     </div>
                 )}
             </div>
@@ -274,25 +253,25 @@ function Dashboard() {
                         </div>
                         <div className="grid grid-cols-2 gap-3.5">
                             <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-3.5 text-center shadow-2xs">
-                                <p className="text-2xl font-black text-slate-800">{computedCpu}%</p>
+                                <p className="text-2xl font-black text-slate-800">{avgCpu}%</p>
                                 <p className="text-xs text-slate-500 font-semibold mt-0.5">Avg CPU</p>
                             </div>
                             <div className="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3.5 text-center shadow-2xs">
-                                <p className="text-2xl font-black text-slate-800">{liveSnapshot.avgMemory}%</p>
-                                <p className="text-xs text-slate-500 font-semibold mt-0.5">Avg Memory</p>
-                            </div>
-                            <div className="bg-cyan-50/70 border border-cyan-100 rounded-xl p-3.5 text-center shadow-2xs">
-                                <p className="text-xl font-black text-slate-800">{liveSnapshot.totalNet} MBps</p>
-                                <p className="text-xs text-slate-500 font-semibold mt-0.5">Total Net</p>
+                                <p className="text-xl font-black text-slate-800">${runningCost.toFixed(0)}</p>
+                                <p className="text-xs text-slate-500 font-semibold mt-0.5">Running cost / mo</p>
                             </div>
                             <div className="bg-amber-50/70 border border-amber-100 rounded-xl p-3.5 text-center shadow-2xs">
-                                <p className="text-2xl font-black text-slate-800">{liveSnapshot.regions}</p>
-                                <p className="text-xs text-slate-500 font-semibold mt-0.5">Regions</p>
+                                <p className="text-xl font-black text-slate-800">${atRiskCost.toFixed(0)}</p>
+                                <p className="text-xs text-slate-500 font-semibold mt-0.5">At-risk cost / mo</p>
+                            </div>
+                            <div className="bg-cyan-50/70 border border-cyan-100 rounded-xl p-3.5 text-center shadow-2xs">
+                                <p className="text-2xl font-black text-slate-800">{prodCount}</p>
+                                <p className="text-xs text-slate-500 font-semibold mt-0.5">PROD nodes</p>
                             </div>
                         </div>
                     </div>
                     <div className="mt-4 pt-3 border-t border-slate-100 text-center">
-                        <p className="text-xs text-slate-400 font-medium">Live · updates every 2.5s</p>
+                        <p className="text-xs text-slate-400 font-medium">Live · updates every 5s</p>
                     </div>
                 </div>
             </div>

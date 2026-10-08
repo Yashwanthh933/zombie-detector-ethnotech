@@ -3,9 +3,11 @@ package com.zombiedetector.service;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -51,18 +53,27 @@ public class TrafficSimulator {
             rotateIdleProfile(nodes);
         }
 
-        for (ManagedNode node : nodes) {
+        for (ManagedNode snapshot : nodes) {
+            // Re-read each node so we never write back stale status/override fields, and skip
+            // nodes that were removed since the tick began.
+            Optional<ManagedNode> fresh = nodeRepository.findById(snapshot.getNodeId());
+            if (fresh.isEmpty()) continue;
+            ManagedNode node = fresh.get();
+
             boolean idleProfile = idleNodeIds.contains(node.getNodeId());
 
             double cpu = idleProfile ? rand.nextDouble() * 10 : 15 + rand.nextDouble() * 70;
             boolean hadTraffic = idleProfile ? rand.nextInt(100) < 5 : rand.nextInt(100) < 70;
 
-            metricRepository.save(new NodeMetric(node.getNodeId(), cpu, hadTraffic));
-
             node.setAvgCpuLoadLast15Min(cpu);
             node.setLastTrafficTimestamp(hadTraffic ? LocalDateTime.now() : node.getLastTrafficTimestamp());
+            try {
+                nodeRepository.save(node);
+                metricRepository.save(new NodeMetric(node.getNodeId(), cpu, hadTraffic));
+            } catch (OptimisticLockingFailureException ex) {
+                // A user action or the detector touched this node mid-tick; skip one sample.
+            }
         }
-        nodeRepository.saveAll(nodes);
     }
 
     private void rotateIdleProfile(List<ManagedNode> nodes) {

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-
-const API = 'http://localhost:8080/api'
+import { apiFetch } from '../api'
 
 function AuditTrail() {
     const [events, setEvents] = useState([])
@@ -8,7 +7,7 @@ function AuditTrail() {
     useEffect(() => {
         const fetchAudit = async () => {
             try {
-                const r = await fetch(`${API}/audit`)
+                const r = await apiFetch('/audit')
                 if (r.ok) setEvents(await r.json())
             } catch (err) {
                 console.error('Failed fetching backend audit trail', err)
@@ -23,7 +22,12 @@ function AuditTrail() {
         FLAGGED: 'bg-amber-100 text-amber-800 border-amber-200',
         RECOVERED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
         STOPPED: 'bg-rose-100 text-rose-800 border-rose-200',
-        OVERRIDE: 'bg-sky-100 text-sky-800 border-sky-200'
+        OVERRIDE: 'bg-sky-100 text-sky-800 border-sky-200',
+        NODE_ADDED: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        NODE_DELETED: 'bg-slate-200 text-slate-700 border-slate-300',
+        POLICY_UPDATED: 'bg-violet-100 text-violet-800 border-violet-200',
+        SCHEDULER_PAUSED: 'bg-orange-100 text-orange-800 border-orange-200',
+        SCHEDULER_RESUMED: 'bg-teal-100 text-teal-800 border-teal-200'
     }
 
     return (
@@ -60,9 +64,10 @@ function AuditTrail() {
                                     px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-2xs
                                     ${actionColors[e.action] || 'bg-slate-100 text-slate-700 border-slate-200'}
                                 `}>
-                                    {e.action?.toLowerCase()}
+                                    {e.action?.toLowerCase().replace('_', ' ')}
                                 </span>
-                                <span className="text-sm font-bold text-slate-700">{e.targetNodeId}</span>
+                                <span className="text-sm font-bold text-slate-700">{e.targetNodeId || '—'}</span>
+                                <span className="text-xs text-slate-400">{e.actor}</span>
                             </div>
                             <span className="text-xs text-slate-500 truncate max-w-md font-medium">
                                 {e.details}

@@ -1,5 +1,7 @@
 package com.zombiedetector.model;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
@@ -14,6 +16,9 @@ public class Policy {
     private int recoveryStrikesRequired = 3;
     private int gracePeriodSeconds = 20;
 
+    private LocalDateTime updatedAt;
+    private String updatedBy;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public double getCpuThreshold() { return cpuThreshold; }
@@ -26,4 +31,8 @@ public class Policy {
     public void setRecoveryStrikesRequired(int v) { this.recoveryStrikesRequired = v; }
     public int getGracePeriodSeconds() { return gracePeriodSeconds; }
     public void setGracePeriodSeconds(int v) { this.gracePeriodSeconds = v; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 }

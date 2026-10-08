@@ -30,6 +30,11 @@ public class AuditEvent {
         this.details = details;
     }
 
+    public AuditEvent(LocalDateTime timestamp, String actor, String action, String targetNodeId, String outcome, String details) {
+        this(actor, action, targetNodeId, outcome, details);
+        this.timestamp = timestamp;
+    }
+
     public Long getId() { return id; }
     public LocalDateTime getTimestamp() { return timestamp; }
     public String getActor() { return actor; }
